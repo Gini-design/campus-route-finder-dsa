@@ -1,0 +1,2394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MANIT Bhopal — Campus Route Finder (DSA Mini-Project)</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Inter Font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <style>
+    /* =========================================================================
+       LOW-CONTRAST, CALM & MATTE PASTEL DESIGN TOKENS
+       ========================================================================= */
+    :root {
+      --bg-canvas: #F4F3EE;
+      --bg-dot: #DFDDD2;
+      --bg-surface: #FAFAF7;
+      --bg-card: #FDFCF9;
+      --border-soft: #DDDAD0;
+      --border-strong: #C8C4B8;
+      --text-primary: #3D4449;
+      --text-secondary: #727980;
+      --accent-sage: #5E9380;
+      --accent-sage-hover: #4F806E;
+      --route-highlight: #528B78;
+      --edge-default: #9AA3AB;
+      --edge-blocked: #C4837A;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+
+    input, select, textarea, .selectable-text {
+      user-select: text;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-canvas);
+      color: var(--text-primary);
+      margin: 0;
+      overflow: hidden;
+    }
+
+    .mono-font {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Subtle dot-grid background for the interactive graph canvas */
+    .canvas-backdrop {
+      background-color: var(--bg-canvas);
+      background-image: radial-gradient(var(--bg-dot) 1.35px, transparent 1.35px);
+      background-size: 24px 24px;
+    }
+
+    /* Gentle route flow animation when a route is highlighted */
+    @keyframes routeFlow {
+      from {
+        stroke-dashoffset: 28;
+      }
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+
+    .route-animated-dash {
+      stroke-dasharray: 9 5;
+      animation: routeFlow 1.1s linear infinite;
+    }
+
+    /* Rubber-band line animation when interactively connecting two buildings */
+    @keyframes rubberDash {
+      from {
+        stroke-dashoffset: 16;
+      }
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+
+    .rubber-line {
+      stroke-dasharray: 6 4;
+      animation: rubberDash 0.7s linear infinite;
+    }
+
+    /* Building doodle group hover & drag states */
+    .building-node {
+      cursor: grab;
+      transition: filter 0.18s ease;
+    }
+
+    .building-node:active {
+      cursor: grabbing;
+    }
+
+    .building-node:hover .building-card-bg {
+      stroke: #8A9A92;
+      stroke-width: 1.8px;
+    }
+
+    /* Edge group hover effect */
+    .edge-group {
+      cursor: pointer;
+    }
+
+    .edge-group:hover .edge-visible-line {
+      filter: brightness(0.88);
+    }
+
+    .edge-group:hover .edge-pill-bg {
+      stroke: #959E9B;
+    }
+
+    /* Custom subtle scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #F2F0E8;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #CFCBC0;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #B8B3A6;
+    }
+
+    /* Soft toggle switch */
+    .toggle-checkbox:checked + .toggle-track {
+      background-color: var(--edge-blocked);
+    }
+    .toggle-checkbox:checked + .toggle-track .toggle-thumb {
+      transform: translateX(18px);
+    }
+  </style>
+</head>
+
+<body class="h-screen w-screen flex flex-col">
+
+  <!-- =========================================================================
+       TOP HEADER & NAVIGATION TABS
+       ========================================================================= -->
+  <header class="bg-[#FAFAF7] border-b border-[#DDDAD0] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 z-20 shrink-0">
+    <!-- Brand & Project Title -->
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-[#E8EFEA] border border-[#C9D8CF] flex items-center justify-center text-[#4F806E] shrink-0">
+        <!-- Minimal Campus Arch SVG -->
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 20h18" />
+          <path d="M5 20V9l7-4 7 4v11" />
+          <path d="M9 20v-5a3 3 0 0 1 6 0v5" />
+        </svg>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-[15px] font-semibold text-[#3D4449] tracking-tight">MANIT Bhopal — Campus Route Finder</h1>
+          <span class="hidden sm:inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-[#ECEAE2] text-[#666D73] border border-[#DDDAD0]">
+            DSA Project 5
+          </span>
+        </div>
+        <p class="text-[11.5px] text-[#727980]">Adjacency List Graph · Singly Linked List · BFS Queue · Route Stack</p>
+      </div>
+    </div>
+
+    <!-- Action Tabs & Manual Controls -->
+    <div class="flex flex-wrap items-center gap-2">
+      <button id="btnOpenAddBuilding" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#F2F0E8] hover:bg-[#E7E4D9] text-[#3D4449] border border-[#D8D4C8] transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-[#5E9380]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Add Building
+      </button>
+
+      <button id="btnOpenConnectionsTab" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#F2F0E8] hover:bg-[#E7E4D9] text-[#3D4449] border border-[#D8D4C8] transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5 text-[#667885]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M8.5 15.5l7-7"/></svg>
+        Connections <span id="badgeEdgeCount" class="ml-0.5 px-1.5 py-0.2 bg-[#E4E1D6] rounded-full text-[11px] text-[#5B6268]">17</span>
+      </button>
+
+      <button id="btnToggleDsaDrawer" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#E9F0EC] hover:bg-[#DCE8E1] text-[#3E6B5C] border border-[#C7D9D0] transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h10M4 18h14"/></svg>
+        Live DSA View
+      </button>
+
+      <button id="btnResetCampus" class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-[#FAFAF7] hover:bg-[#EFECE3] text-[#727980] border border-[#DDDAD0] transition" title="Restore original 12 MANIT Bhopal buildings and 17 pathways">
+        Reset Map
+      </button>
+    </div>
+  </header>
+
+  <!-- =========================================================================
+       ROUTE FINDER CONTROL BAR
+       ========================================================================= -->
+  <section class="bg-[#F8F7F2] border-b border-[#DDDAD0] px-4 py-2 flex flex-wrap items-center justify-between gap-2.5 z-10 shrink-0">
+    <div class="flex flex-wrap items-center gap-2">
+      <!-- Start Location -->
+      <div class="flex items-center gap-1.5">
+        <label for="startSelect" class="text-[12px] font-medium text-[#687077]">From:</label>
+        <select id="startSelect" class="bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449] focus:outline-none focus:border-[#5E9380] min-w-[180px]"></select>
+      </div>
+
+      <!-- Swap Start & Destination -->
+      <button id="btnSwapLocations" class="p-1.5 rounded-lg bg-[#EFECE4] hover:bg-[#E4E0D5] border border-[#D8D4C8] text-[#61686E] transition" title="Swap Start and Destination">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/>
+        </svg>
+      </button>
+
+      <!-- Destination Location -->
+      <div class="flex items-center gap-1.5">
+        <label for="endSelect" class="text-[12px] font-medium text-[#687077]">To:</label>
+        <select id="endSelect" class="bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449] focus:outline-none focus:border-[#5E9380] min-w-[180px]"></select>
+      </div>
+
+      <!-- Traversal Algorithm -->
+      <div class="flex items-center gap-1.5 ml-0 sm:ml-1">
+        <label for="algoSelect" class="text-[12px] font-medium text-[#687077]">Method:</label>
+        <select id="algoSelect" class="bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]">
+          <option value="bfs">BFS — Queue + Stack (Fewest Hops)</option>
+          <option value="dijkstra">Dijkstra — Shortest Distance (Meters)</option>
+        </select>
+      </div>
+
+      <!-- Find Route CTA -->
+      <button id="btnFindRoute" class="px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-[#FDFCF9] shadow-sm transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+        </svg>
+        Find Route
+      </button>
+
+      <!-- Re-open Route Output Popup (shown when a route is active) -->
+      <button id="btnShowRouteModal" class="hidden px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-[#E6F0EC] hover:bg-[#D8E7E0] text-[#3E6B5C] border border-[#BFD4CA] transition">
+        Route Details
+      </button>
+
+      <!-- Clear Highlight -->
+      <button id="btnClearRoute" class="hidden px-2.5 py-1.5 rounded-lg text-[12px] font-medium bg-[#F2F0E8] hover:bg-[#E6E3D8] text-[#687077] border border-[#D8D4C8] transition">
+        Clear Highlight
+      </button>
+    </div>
+
+    <!-- Interactive Mode Banner / Quick Status -->
+    <div id="connectModeBanner" class="hidden items-center gap-2 px-3 py-1 rounded-lg bg-[#E9F0EC] border border-[#BBD1C6] text-[12px] text-[#3B6456]">
+      <span class="w-2 h-2 rounded-full bg-[#5E9380] animate-pulse"></span>
+      <span id="connectModeText">Click another building to connect pathway...</span>
+      <button id="btnCancelConnectMode" class="ml-1 underline font-medium hover:text-[#28473C]">Cancel</button>
+    </div>
+  </section>
+
+  <!-- =========================================================================
+       MAIN WORKSPACE: INTERACTIVE SVG GRAPH CANVAS + LIVE DSA DRAWER
+       ========================================================================= -->
+  <main class="relative flex-1 flex overflow-hidden canvas-backdrop">
+    <!-- Interactive SVG Graph Canvas -->
+    <div id="canvasContainer" class="relative flex-1 h-full w-full overflow-hidden">
+      <svg id="campusSvg" viewBox="0 0 1280 700" preserveAspectRatio="xMidYMid meet" class="w-full h-full block">
+        <defs>
+          <!-- Subtle card drop shadow -->
+          <filter id="softCardShadow" x="-15%" y="-15%" width="130%" height="135%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#5A584F" flood-opacity="0.09" />
+          </filter>
+          <!-- Highlighted route card glow -->
+          <filter id="routeNodeGlow" x="-20%" y="-20%" width="140%" height="145%">
+            <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#528B78" flood-opacity="0.26" />
+          </filter>
+        </defs>
+
+        <!-- Background group for capturing empty-canvas clicks & right-clicks -->
+        <rect id="svgBgRect" x="-2000" y="-2000" width="6000" height="6000" fill="transparent" />
+
+        <!-- Viewport group supporting zoom/pan -->
+        <g id="viewportGroup">
+          <!-- Layer 1: Pathways (Edges) -->
+          <g id="edgesLayer"></g>
+
+          <!-- Layer 2: Interactive Rubber-Band Connection Preview Line -->
+          <line id="rubberBandLine" x1="0" y1="0" x2="0" y2="0" stroke="#5E9380" stroke-width="2.4" class="rubber-line hidden pointer-events-none" />
+
+          <!-- Layer 3: Campus Buildings (Doodle Cards) -->
+          <g id="buildingsLayer"></g>
+        </g>
+      </svg>
+
+      <!-- Bottom-Left Legend & Interaction Guide -->
+      <div class="absolute bottom-3 left-3 bg-[#FAFAF7]/95 backdrop-blur-sm border border-[#DDDAD0] rounded-xl px-3.5 py-2.5 shadow-sm max-w-md pointer-events-none">
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11.5px] text-[#565E64]">
+          <span class="flex items-center gap-1.5">
+            <span class="w-4 h-[2.5px] bg-[#9AA3AB] inline-block rounded"></span> Open Pathway
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-4 h-0 border-t-2 border-dashed border-[#C4837A] inline-block"></span> Blocked (`isBlocked`)
+          </span>
+          <span class="flex items-center gap-1.5">
+            <span class="w-4 h-[3px] bg-[#528B78] inline-block rounded"></span> Active Route
+          </span>
+        </div>
+        <p class="text-[11px] text-[#7A8288] mt-1">
+          Drag any building to move · <strong>Right-click a building</strong> to connect · <strong>Right-click a line</strong> for color &amp; block toggle
+        </p>
+      </div>
+
+      <!-- Bottom-Right Zoom Controls -->
+      <div class="absolute bottom-3 right-3 flex items-center gap-1 bg-[#FAFAF7]/95 border border-[#DDDAD0] rounded-xl p-1 shadow-sm">
+        <button id="btnZoomOut" class="w-7 h-7 rounded-lg hover:bg-[#ECE9DF] text-[#555D63] flex items-center justify-center text-sm font-semibold" title="Zoom Out">−</button>
+        <button id="btnZoomReset" class="px-2 h-7 rounded-lg hover:bg-[#ECE9DF] text-[11.5px] font-medium text-[#666E75]" title="Fit Campus to Screen">100%</button>
+        <button id="btnZoomIn" class="w-7 h-7 rounded-lg hover:bg-[#ECE9DF] text-[#555D63] flex items-center justify-center text-sm font-semibold" title="Zoom In">+</button>
+      </div>
+    </div>
+
+    <!-- =======================================================================
+         SLIDE-OUT LIVE ADJACENCY LIST & DSA INSPECTOR DRAWER
+         ======================================================================= -->
+    <aside id="dsaDrawer" class="hidden w-full sm:w-[410px] bg-[#FAFAF7] border-l border-[#DDDAD0] h-full flex-col z-20 shrink-0 shadow-sm">
+      <div class="px-4 py-3 border-b border-[#DDDAD0] flex items-center justify-between bg-[#F6F5EF]">
+        <div>
+          <h2 class="text-[13.5px] font-semibold text-[#3D4449]">Live Adjacency List (`campus[]`)</h2>
+          <p class="text-[11px] text-[#727980]">Singly Linked List `head` pointers updating in real time</p>
+        </div>
+        <button id="btnCloseDsaDrawer" class="p-1.5 rounded-lg hover:bg-[#E7E4D9] text-[#6B7278]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Summary Counters -->
+      <div class="grid grid-cols-3 gap-2 p-3 border-b border-[#E5E2D9] bg-[#FAFAF7] text-center">
+        <div class="bg-[#F3F1EA] rounded-lg py-1.5 px-2 border border-[#E2DFD5]">
+          <div id="statVertices" class="text-[15px] font-semibold text-[#3D4449]">12</div>
+          <div class="text-[10.5px] text-[#727980]">Vertices (`V`)</div>
+        </div>
+        <div class="bg-[#F3F1EA] rounded-lg py-1.5 px-2 border border-[#E2DFD5]">
+          <div id="statEdges" class="text-[15px] font-semibold text-[#3D4449]">17</div>
+          <div class="text-[10.5px] text-[#727980]">Pathways (`E`)</div>
+        </div>
+        <div class="bg-[#F3F1EA] rounded-lg py-1.5 px-2 border border-[#E2DFD5]">
+          <div id="statBlocked" class="text-[15px] font-semibold text-[#B57269]">0</div>
+          <div class="text-[10.5px] text-[#727980]">Blocked</div>
+        </div>
+      </div>
+
+      <!-- Adjacency List Chains -->
+      <div id="adjacencyListContainer" class="flex-1 overflow-y-auto p-3 space-y-2 selectable-text"></div>
+    </aside>
+  </main>
+
+  <!-- =========================================================================
+       CUSTOM RIGHT-CLICK CONTEXT MENU (BUILDINGS & CANVAS)
+       ========================================================================= -->
+  <div id="contextMenu" class="hidden fixed z-50 w-60 bg-[#FAFAF7] border border-[#CFCBC0] rounded-xl shadow-lg py-1.5 text-[12.5px] text-[#3D4449]">
+    <div id="contextMenuHeader" class="px-3 py-1.5 border-b border-[#E6E3DA] text-[11px] font-semibold text-[#6F767D] truncate"></div>
+    <div id="contextMenuItems" class="py-1"></div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 1: EDGE (PATHWAY) SETTINGS DIALOG (COLOR + isBlocked TOGGLE)
+       ========================================================================= -->
+  <div id="edgeSettingsModal" class="hidden fixed inset-0 z-40 bg-[#3D4449]/25 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-[#FAFAF7] border border-[#D5D1C5] rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#F4F2EB] border-b border-[#E2DFD5] flex items-center justify-between">
+        <div>
+          <h3 class="text-[14.5px] font-semibold text-[#3D4449]">Pathway Settings (`EdgeNode`)</h3>
+          <p id="edgeModalSubtitle" class="text-[11.5px] text-[#727980] mt-0.5"></p>
+        </div>
+        <button data-close-modal="edgeSettingsModal" class="p-1 rounded-lg hover:bg-[#E5E2D8] text-[#727980]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <!-- Toggle isBlocked -->
+        <div class="flex items-center justify-between p-3 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+          <div>
+            <div class="text-[13px] font-medium text-[#3D4449]">Block Pathway (`isBlocked`)</div>
+            <div class="text-[11.5px] text-[#727980]">Closed roads are bypassed during BFS &amp; Dijkstra</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="edgeBlockedToggle" class="sr-only toggle-checkbox" />
+            <div class="toggle-track w-10 h-5 bg-[#CBD0D3] rounded-full transition-colors relative">
+              <div class="toggle-thumb absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform"></div>
+            </div>
+          </label>
+        </div>
+
+        <!-- Pathway Distance -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label for="edgeDistanceInput" class="text-[12.5px] font-medium text-[#4F565C]">Pathway Distance (meters)</label>
+            <button type="button" id="btnAutoCalcEdgeDist" class="text-[11px] text-[#5E9380] hover:underline font-medium">Estimate from map spacing</button>
+          </div>
+          <input type="number" id="edgeDistanceInput" min="10" max="5000" step="5" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]" />
+        </div>
+
+        <!-- Soft Low-Contrast Color Swatches -->
+        <div>
+          <label class="block text-[12.5px] font-medium text-[#4F565C] mb-2">Pathway Line Color</label>
+          <div class="flex items-center justify-between gap-2">
+            <div id="edgeColorSwatches" class="flex items-center gap-2 flex-wrap"></div>
+            <div class="flex items-center gap-1.5 border border-[#D5D1C5] bg-[#FDFCF9] rounded-lg px-2 py-1">
+              <input type="color" id="edgeCustomColorInput" value="#9AA3AB" class="w-5 h-5 border-0 bg-transparent cursor-pointer p-0" />
+              <span class="text-[11px] text-[#727980]">Custom</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-[#F4F2EB] border-t border-[#E2DFD5] flex items-center justify-between">
+        <button type="button" id="btnDeleteEdge" class="px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-[#B0655C] hover:bg-[#EFE2DF] transition">
+          Delete Pathway
+        </button>
+        <div class="flex items-center gap-2">
+          <button type="button" data-close-modal="edgeSettingsModal" class="px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#EAE7DE] hover:bg-[#DFDCD1] text-[#4F565C] transition">
+            Cancel
+          </button>
+          <button type="button" id="btnSaveEdgeSettings" class="px-4 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-white transition">
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: CONNECT TWO BUILDINGS DIALOG (FROM RIGHT-CLICK BUILDING)
+       ========================================================================= -->
+  <div id="connectBuildingModal" class="hidden fixed inset-0 z-40 bg-[#3D4449]/25 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-[#FAFAF7] border border-[#D5D1C5] rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#F4F2EB] border-b border-[#E2DFD5] flex items-center justify-between">
+        <div>
+          <h3 class="text-[14.5px] font-semibold text-[#3D4449]">Connect Pathway Between Buildings</h3>
+          <p class="text-[11.5px] text-[#727980]">Inserts bidirectional `EdgeNode` at both `head` pointers</p>
+        </div>
+        <button data-close-modal="connectBuildingModal" class="p-1 rounded-lg hover:bg-[#E5E2D8] text-[#727980]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-3.5">
+        <div>
+          <label class="block text-[12px] font-medium text-[#5A6268] mb-1">Source Building (`u`)</label>
+          <select id="connectSrcSelect" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]"></select>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[12px] font-medium text-[#5A6268]">Target Building (`v`)</label>
+            <button type="button" id="btnPickOnMapFromModal" class="text-[11px] text-[#5E9380] hover:underline font-medium">Or pick target directly on map</button>
+          </div>
+          <select id="connectDestSelect" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]"></select>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="text-[12px] font-medium text-[#5A6268]">Distance (meters)</label>
+            <button type="button" id="btnEstimateConnectDist" class="text-[11px] text-[#5E9380] hover:underline font-medium">Auto-estimate from spacing</button>
+          </div>
+          <input type="number" id="connectDistInput" value="180" min="10" max="5000" step="5" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]" />
+        </div>
+
+        <div>
+          <label class="block text-[12px] font-medium text-[#5A6268] mb-1.5">Line Color</label>
+          <div id="connectColorSwatches" class="flex items-center gap-2"></div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-[#F4F2EB] border-t border-[#E2DFD5] flex items-center justify-end gap-2">
+        <button type="button" data-close-modal="connectBuildingModal" class="px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#EAE7DE] hover:bg-[#DFDCD1] text-[#4F565C] transition">
+          Cancel
+        </button>
+        <button type="button" id="btnConfirmConnect" class="px-4 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-white transition">
+          Add Pathway
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 3: MANUAL ADD / EDIT BUILDING DIALOG
+       ========================================================================= -->
+  <div id="buildingModal" class="hidden fixed inset-0 z-40 bg-[#3D4449]/25 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-[#FAFAF7] border border-[#D5D1C5] rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#F4F2EB] border-b border-[#E2DFD5] flex items-center justify-between">
+        <div>
+          <h3 id="buildingModalTitle" class="text-[14.5px] font-semibold text-[#3D4449]">Add Campus Building Node</h3>
+          <p class="text-[11.5px] text-[#727980]">Creates a new `BuildingVertex` doodle on the campus map</p>
+        </div>
+        <button data-close-modal="buildingModal" class="p-1 rounded-lg hover:bg-[#E5E2D8] text-[#727980]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <div>
+          <label for="buildingNameInput" class="block text-[12px] font-medium text-[#5A6268] mb-1">Building Name</label>
+          <input type="text" id="buildingNameInput" placeholder="e.g., Mechanical Block or Hostel 11" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]" />
+        </div>
+
+        <div>
+          <label for="buildingCategorySelect" class="block text-[12px] font-medium text-[#5A6268] mb-1">Building Doodle Style</label>
+          <select id="buildingCategorySelect" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-xl px-3 py-2 text-[13px] text-[#3D4449] focus:outline-none focus:border-[#5E9380]">
+            <option value="Academic">Academic Department (Multi-Window Block)</option>
+            <option value="Hostel">Hostel Bhawan (Multi-Story Residence)</option>
+            <option value="Library">Library / Study Center (Roof + Open Book)</option>
+            <option value="Admin">Administrative Block (Classical Pillars)</option>
+            <option value="Canteen">Canteen / Cafe (Striped Awning)</option>
+            <option value="Amenity">Campus Amenity / Sports / Bank</option>
+            <option value="Gate">Campus Entrance Gate (Arched Gateway)</option>
+          </select>
+        </div>
+
+        <!-- Optional Initial Connection (Shown when creating a new building) -->
+        <div id="initialConnectionSection" class="p-3.5 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5] space-y-2.5">
+          <div class="text-[12px] font-medium text-[#4A5157]">Optional: Connect Initial Pathway</div>
+          <div class="grid grid-cols-3 gap-2">
+            <div class="col-span-2">
+              <select id="newBuildingConnectSelect" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449]"></select>
+            </div>
+            <div>
+              <input type="number" id="newBuildingDistInput" value="200" min="10" step="10" placeholder="Meters" class="w-full bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449]" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 bg-[#F4F2EB] border-t border-[#E2DFD5] flex items-center justify-end gap-2">
+        <button type="button" data-close-modal="buildingModal" class="px-3.5 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#EAE7DE] hover:bg-[#DFDCD1] text-[#4F565C] transition">
+          Cancel
+        </button>
+        <button type="button" id="btnSaveBuilding" class="px-4 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-white transition">
+          Save Building
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 4: CONNECTIONS TAB / PATHWAY MANAGER
+       ========================================================================= -->
+  <div id="connectionsModal" class="hidden fixed inset-0 z-40 bg-[#3D4449]/25 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-[#FAFAF7] border border-[#D5D1C5] rounded-2xl shadow-xl w-full max-w-3xl max-h-[86vh] flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 bg-[#F4F2EB] border-b border-[#E2DFD5] flex items-center justify-between shrink-0">
+        <div>
+          <h3 class="text-[15px] font-semibold text-[#3D4449]">Campus Connections Manager</h3>
+          <p class="text-[11.5px] text-[#727980]">Add new connections manually or toggle `isBlocked` &amp; colors across all pathways</p>
+        </div>
+        <button data-close-modal="connectionsModal" class="p-1.5 rounded-lg hover:bg-[#E5E2D8] text-[#727980]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Manual Add Connection Form -->
+      <div class="p-4 bg-[#F7F6F0] border-b border-[#E2DFD5] shrink-0">
+        <div class="text-[12px] font-semibold text-[#5A6268] mb-2">Add or Update Pathway Connection</div>
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+          <select id="tabConnSrc" class="sm:col-span-4 bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449]"></select>
+          <select id="tabConnDest" class="sm:col-span-4 bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449]"></select>
+          <input type="number" id="tabConnDist" value="190" min="10" step="5" placeholder="Dist (m)" class="sm:col-span-2 bg-[#FDFCF9] border border-[#D5D1C5] rounded-lg px-2.5 py-1.5 text-[12.5px] text-[#3D4449]" />
+          <button id="btnTabAddConn" class="sm:col-span-2 px-3 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-white transition">
+            Connect
+          </button>
+        </div>
+      </div>
+
+      <!-- Existing Pathways Table -->
+      <div class="flex-1 overflow-y-auto p-4">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[#E2DFD5] text-[11.5px] text-[#727980]">
+              <th class="pb-2 font-medium">Pathway (`u ↔ v`)</th>
+              <th class="pb-2 font-medium">Distance</th>
+              <th class="pb-2 font-medium">Color</th>
+              <th class="pb-2 font-medium">Status (`isBlocked`)</th>
+              <th class="pb-2 font-medium text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="connectionsTableBody" class="divide-y divide-[#EAE7DE] text-[12.5px]"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 5: ROUTE OUTPUT POP-UP BOX (WITH QUEUE & STACK EXECUTION TRACE)
+       ========================================================================= -->
+  <div id="routeOutputModal" class="hidden fixed inset-0 z-40 bg-[#3D4449]/25 backdrop-blur-[1px] flex items-center justify-center p-4">
+    <div class="bg-[#FAFAF7] border border-[#D5D1C5] rounded-2xl shadow-xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden">
+      <!-- Header -->
+      <div class="px-5 py-3.5 bg-[#F4F2EB] border-b border-[#E2DFD5] flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2.5">
+          <h3 class="text-[15px] font-semibold text-[#3D4449]">Campus Route Output</h3>
+          <span id="routeStatusBadge" class="px-2.5 py-0.5 rounded-full text-[11px] font-semibold"></span>
+        </div>
+        <button data-close-modal="routeOutputModal" class="p-1.5 rounded-lg hover:bg-[#E5E2D8] text-[#727980]">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Scrollable Route Details -->
+      <div class="p-5 overflow-y-auto space-y-4 selectable-text">
+        <!-- Summary Metrics -->
+        <div id="routeMetricsGrid" class="grid grid-cols-3 gap-3">
+          <div class="p-3 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+            <div class="text-[11px] text-[#727980]">Total Walking Distance</div>
+            <div id="metricTotalDistance" class="text-[18px] font-semibold text-[#3E6B5C] mt-0.5">0 meters</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+            <div class="text-[11px] text-[#727980]">Estimated Walk Time</div>
+            <div id="metricWalkTime" class="text-[18px] font-semibold text-[#3D4449] mt-0.5">~0 min</div>
+          </div>
+          <div class="p-3 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+            <div class="text-[11px] text-[#727980]">Pathway Segments</div>
+            <div id="metricHopCount" class="text-[18px] font-semibold text-[#3D4449] mt-0.5">0 hops</div>
+          </div>
+        </div>
+
+        <!-- Step-by-Step Discovered Route Chain -->
+        <div class="p-4 rounded-xl bg-[#FDFCF9] borderawborder-[#E2DFD5]">
+          <div class="flex items-center justify-betweeaw mb-2.5">
+            <span class="text-[12px] font-semibold texaw-[#4F565C]">Step-by-Step Campus Route</span>
+            <span id="routeAlgoLabel" class="text-[11px] text-[#727980] mono-font"></span>
+          </div>
+          <div id="routeBreadcrumbChain" class="flex flex-wrap items-center gap-1.5"></div>
+        </div>
+
+        <!-- DSA Queue & Stack Execution Trace -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <!-- Queue Trace -->
+          <div class="p-3.5 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+            <div class="text-[11.5px] font-semibold text-[#4A5157] mb-1">1. `RouteQueue` (FIFO Traversal Order)</div>
+            <p class="text-[11px] text-[#727980] mb-2">Buildings dequeued level-by-level (skipping `isBlocked` edges):</p>
+            <div id="traceQueueBox" class="mono-font text-[11px] text-[#3D4449] bg-[#FDFCF9] border border-[#E2DFD5] rounded-lg p-2.5 max-h-32 overflow-y-auto leading-relaxed"></div>
+          </div>
+
+          <!-- Stack Trace -->
+          <div class="p-3.5 rounded-xl bg-[#F3F1EA] border border-[#E2DFD5]">
+            <div class="text-[11.5px] font-semibold text-[#4A5157] mb-1">2. `RouteStack` (LIFO Path Reversal)</div>
+            <p class="text-[11px] text-[#727980] mb-2">Backtracked `parent[]` pushed &amp; popped into forward order:</p>
+            <div id="traceStackBox" class="mono-font text-[11px] text-[#3D4449] bg-[#FDFCF9] border border-[#E2DFD5] rounded-lg p-2.5 max-h-32 overflow-y-auto leading-relaxed"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-5 py-3 bg-[#F4F2EB] border-t border-[#E2DFD5] flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <button type="button" id="btnSwitchAlgoCompare" class="px-3 py-1.5 rounded-lg text-[12px] font-medium bg-[#EAE7DE] hover:bg-[#DFDCD1] text-[#4A5157] transition">
+          Compare with Other Method
+        </button>
+        <button type="button" data-close-modal="routeOutputModal" class="px-4 py-1.5 rounded-lg text-[12.5px] font-medium bg-[#5E9380] hover:bg-[#4F806E] text-white transition">
+          Inspect Highlighted Map
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subtle Bottom Toast Notification (Replaces native alert) -->
+  <div id="toastBanner" class="hidden fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#3D4449] text-[#FAFAF7] text-[12.5px] font-medium shadow-md transition-opacity"></div>
+
+  <!-- =========================================================================
+       CORE DATA STRUCTURES & INTERACTIVE GRAPH APPLICATION SCRIPT
+       ========================================================================= -->
+  <script>
+    /* =========================================================================
+       SECTION 1: CORE DATA STRUCTURES (IMPLEMENTED FROM SCRATCH FOR DSA VIVA)
+       ========================================================================= */
+
+    /**
+     * 1. SINGLY LINKED LIST NODE: Represents a directed edge attached to a building's signpost.
+     */
+    class EdgeNode {
+      constructor(destId, distance, color = '#9AA3AB', isBlocked = false, next = null) {
+        this.destId = destId;       // Destination vertex ID
+        this.distance = distance;   // Distance in meters
+        this.color = color;         // Low-contrast pathway stroke color
+        this.isBlocked = isBlocked; // Boolean flag for road closure
+        this.next = next;           // Pointer to next EdgeNode in the Singly Linked List
+      }
+    }
+
+    /**
+     * 2. GRAPH VERTEX: Represents a campus building holding a `head` pointer to its Edge Linked List.
+     */
+    class BuildingVertex {
+      constructor(id, name, category, x, y) {
+        this.id = id;
+        this.name = name;
+        this.category = category;
+        this.x = x;
+        this.y = y;
+        this.head = null; // Head pointer to Singly Linked List of EdgeNodes
+      }
+    }
+
+    /**
+     * 3. CUSTOM POINTER-BASED QUEUE (FIFO): Used for Breadth-First Search (BFS).
+     */
+    class QueueNode {
+      constructor(value) {
+        this.value = value;
+        this.next = null;
+      }
+    }
+
+    class RouteQueue {
+      constructor() {
+        this.front = null;
+        this.rear = null;
+      }
+
+      isEmpty() {
+        return this.front === null;
+      }
+
+      enqueue(val) {
+        const newNode = new QueueNode(val);
+        if (this.rear === null) {
+          this.front = newNode;
+          this.rear = newNode;
+        } else {
+          this.rear.next = newNode;
+          this.rear = newNode;
+        }
+      }
+
+      dequeue() {
+        if (this.isEmpty()) return null;
+        const temp = this.front;
+        this.front = this.front.next;
+        if (this.front === null) {
+          this.rear = null;
+        }
+        return temp.value;
+      }
+    }
+
+    /**
+     * 4. CUSTOM POINTER-BASED STACK (LIFO): Reconstructs discovered path in forward order.
+     */
+    class StackNode {
+      constructor(value) {
+        this.value = value;
+        this.next = null;
+      }
+    }
+
+    class RouteStack {
+      constructor() {
+        this.top = null;
+      }
+
+      isEmpty() {
+        return this.top === null;
+      }
+
+      push(val) {
+        const newNode = new StackNode(val);
+        newNode.next = this.top;
+        this.top = newNode;
+      }
+
+      pop() {
+        if (this.isEmpty()) return null;
+        const val = this.top.value;
+        this.top = this.top.next;
+        return val;
+      }
+    }
+
+    /**
+     * 5. ADJACENCY LIST GRAPH: Manages vertices, linked lists of edges, and route search.
+     */
+    class CampusGraph {
+      constructor() {
+        this.vertices = []; // Array of BuildingVertex objects
+        this.nextId = 0;
+      }
+
+      getVertex(id) {
+        for (let i = 0; i < this.vertices.length; i++) {
+          if (this.vertices[i].id === id) return this.vertices[i];
+        }
+        return null;
+      }
+
+      addBuilding(name, category, x, y) {
+        const id = this.nextId++;
+        const vertex = new BuildingVertex(id, name, category, x, y);
+        this.vertices.push(vertex);
+        return vertex;
+      }
+
+      updateBuilding(id, name, category) {
+        const v = this.getVertex(id);
+        if (!v) return false;
+        v.name = name;
+        v.category = category;
+        return true;
+      }
+
+      // Removes a building and unlinks all incident EdgeNodes from every Singly Linked List
+      removeBuilding(id) {
+        for (let i = 0; i < this.vertices.length; i++) {
+          if (this.vertices[i].id !== id) {
+            this._deleteDirectedEdge(this.vertices[i].id, id);
+          }
+        }
+        this.vertices = this.vertices.filter(v => v.id !== id);
+      }
+
+      // Helper: Searches u's Linked List for edge pointing to v
+      findDirectedEdge(u, v) {
+        const vertexU = this.getVertex(u);
+        if (!vertexU) return null;
+        let curr = vertexU.head;
+        while (curr !== null) {
+          if (curr.destId === v) return curr;
+          curr = curr.next;
+        }
+        return null;
+      }
+
+      // Helper: O(1) Head Insertion into u's Singly Linked List (or updates if already connected)
+      _insertOrUpdateDirected(u, v, distance, color, isBlocked) {
+        const existing = this.findDirectedEdge(u, v);
+        if (existing) {
+          existing.distance = distance;
+          if (color) existing.color = color;
+          if (typeof isBlocked === 'boolean') existing.isBlocked = isBlocked;
+          return;
+        }
+        const vertexU = this.getVertex(u);
+        if (!vertexU) return;
+        const newEdge = new EdgeNode(v, distance, color || '#9AA3AB', Boolean(isBlocked), vertexU.head);
+        vertexU.head = newEdge;
+      }
+
+      // Bidirectional pathway insertion/update
+      addOrUpdatePathway(u, v, distance, color = '#9AA3AB', isBlocked = false) {
+        if (u === v) return false;
+        if (!this.getVertex(u) || !this.getVertex(v)) return false;
+        this._insertOrUpdateDirected(u, v, distance, color, isBlocked);
+        this._insertOrUpdateDirected(v, u, distance, color, isBlocked);
+        return true;
+      }
+
+      setPathwayBlocked(u, v, isBlocked) {
+        const e1 = this.findDirectedEdge(u, v);
+        const e2 = this.findDirectedEdge(v, u);
+        if (!e1 || !e2) return false;
+        e1.isBlocked = isBlocked;
+        e2.isBlocked = isBlocked;
+        return true;
+      }
+
+      setPathwayColor(u, v, color) {
+        const e1 = this.findDirectedEdge(u, v);
+        const e2 = this.findDirectedEdge(v, u);
+        if (!e1 || !e2) return false;
+        e1.color = color;
+        e2.color = color;
+        return true;
+      }
+
+      setPathwayDistance(u, v, distance) {
+        const e1 = this.findDirectedEdge(u, v);
+        const e2 = this.findDirectedEdge(v, u);
+        if (!e1 || !e2) return false;
+        e1.distance = distance;
+        e2.distance = distance;
+        return true;
+      }
+
+      // Helper: Unlinks edge (u -> v) from u's Singly Linked List using prev & curr pointers
+      _deleteDirectedEdge(u, v) {
+        const vertexU = this.getVertex(u);
+        if (!vertexU) return false;
+        let curr = vertexU.head;
+        let prev = null;
+
+        while (curr !== null && curr.destId !== v) {
+          prev = curr;
+          curr = curr.next;
+        }
+        if (curr === null) return false;
+
+        if (prev === null) {
+          vertexU.head = curr.next; // Deleting head node
+        } else {
+          prev.next = curr.next;   // Bypassing middle/tail node
+        }
+        return true;
+      }
+
+      removePathway(u, v) {
+        const d1 = this._deleteDirectedEdge(u, v);
+        const d2 = this._deleteDirectedEdge(v, u);
+        return d1 && d2;
+      }
+
+      // Returns unique undirected edges for rendering & table display
+      getAllUniquePathways() {
+        const list = [];
+        const seen = new Set();
+        for (let i = 0; i < this.vertices.length; i++) {
+          const u = this.vertices[i].id;
+          let curr = this.vertices[i].head;
+          while (curr !== null) {
+            const v = curr.destId;
+            const key = u < v ? `${u}-${v}` : `${v}-${u}`;
+            if (!seen.has(key)) {
+              seen.add(key);
+              list.push({
+                u,
+                v,
+                distance: curr.distance,
+                color: curr.color,
+                isBlocked: curr.isBlocked
+              });
+            }
+            curr = curr.next;
+          }
+        }
+        return list;
+      }
+
+      /**
+       * ALGORITHM 1: Breadth-First Search (BFS) using Custom RouteQueue + RouteStack
+       */
+      findRouteBFS(startId, endId) {
+        const visited = {};
+        const parent = {};
+        const distFromParent = {};
+        const queueDequeueLog = [];
+
+        for (let i = 0; i < this.vertices.length; i++) {
+          const id = this.vertices[i].id;
+          visited[id] = false;
+          parent[id] = -1;
+          distFromParent[id] = 0;
+        }
+
+        const q = new RouteQueue();
+        visited[startId] = true;
+        q.enqueue(startId);
+
+        while (!q.isEmpty()) {
+          const curr = q.dequeue();
+          queueDequeueLog.push(curr);
+
+          if (curr === endId) break;
+
+          const vertex = this.getVertex(curr);
+          let edge = vertex ? vertex.head : null;
+
+          // Traverse Singly Linked List of adjacent pathways
+          while (edge !== null) {
+            const nextNode = edge.destId;
+            if (!edge.isBlocked && !visited[nextNode]) {
+              visited[nextNode] = true;
+              parent[nextNode] = curr;
+              distFromParent[nextNode] = edge.distance;
+              q.enqueue(nextNode);
+            }
+            edge = edge.next;
+          }
+        }
+
+        return this._reconstructWithStack(startId, endId, visited[endId], parent, distFromParent, queueDequeueLog, 'BFS (Queue + Stack)');
+      }
+
+      /**
+       * ALGORITHM 2: Dijkstra's Shortest Distance (Meters) + RouteStack
+       */
+      findRouteDijkstra(startId, endId) {
+        const dist = {};
+        const visited = {};
+        const parent = {};
+        const distFromParent = {};
+        const settleOrderLog = [];
+
+        for (let i = 0; i < this.vertices.length; i++) {
+          const id = this.vertices[i].id;
+          dist[id] = Infinity;
+          visited[id] = false;
+          parent[id] = -1;
+          distFromParent[id] = 0;
+        }
+
+        dist[startId] = 0;
+
+        for (let step = 0; step < this.vertices.length; step++) {
+          // Pick unvisited vertex with minimum cumulative distance
+          let u = -1;
+          let minVal = Infinity;
+          for (let i = 0; i < this.vertices.length; i++) {
+            const id = this.vertices[i].id;
+            if (!visited[id] && dist[id] < minVal) {
+              minVal = dist[id];
+              u = id;
+            }
+          }
+
+          if (u === -1 || minVal === Infinity) break;
+          visited[u] = true;
+          settleOrderLog.push(u);
+
+          if (u === endId) break;
+
+          // Relax open pathways in u's Singly Linked List
+          let edge = this.getVertex(u).head;
+          while (edge !== null) {
+            if (!edge.isBlocked && !visited[edge.destId]) {
+              const candidate = dist[u] + edge.distance;
+              if (candidate < dist[edge.destId]) {
+                dist[edge.destId] = candidate;
+                parent[edge.destId] = u;
+                distFromParent[edge.destId] = edge.distance;
+              }
+            }
+            edge = edge.next;
+          }
+        }
+
+        const reached = dist[endId] !== Infinity;
+        return this._reconstructWithStack(startId, endId, reached, parent, distFromParent, settleOrderLog, 'Dijkstra (Min-Dist + Stack)');
+      }
+
+      /**
+       * Reconstructs forward route and total distance using Custom RouteStack (LIFO)
+       */
+      _reconstructWithStack(startId, endId, isConnected, parent, distFromParent, visitationLog, algorithmName) {
+        if (!isConnected) {
+          return {
+            connected: false,
+            algorithmName,
+            path: [],
+            segments: [],
+            totalDistance: 0,
+            visitationLog,
+            stackPushOrder: [],
+            stackPopOrder: []
+          };
+        }
+
+        const stack = new RouteStack();
+        const stackPushOrder = [];
+        let totalDistance = 0;
+        let trace = endId;
+
+        // Push parent trail from destination back to source
+        while (trace !== -1) {
+          stack.push(trace);
+          stackPushOrder.push(trace);
+          totalDistance += distFromParent[trace];
+          trace = parent[trace];
+        }
+
+        // Pop from stack to obtain forward start-to-end walking order
+        const path = [];
+        const stackPopOrder = [];
+        while (!stack.isEmpty()) {
+          const id = stack.pop();
+          path.push(id);
+          stackPopOrder.push(id);
+        }
+
+        const segments = [];
+        for (let i = 0; i < path.length - 1; i++) {
+          const u = path[i];
+          const v = path[i + 1];
+          const e = this.findDirectedEdge(u, v);
+          segments.push({
+            from: u,
+            to: v,
+            distance: e ? e.distance : 0
+          });
+        }
+
+        return {
+          connected: true,
+          algorithmName,
+          path,
+          segments,
+          totalDistance,
+          visitationLog,
+          stackPushOrder,
+          stackPopOrder
+        };
+      }
+    }
+
+    /* =========================================================================
+       SECTION 2: LOW-CONTRAST SWATCHES & MANIT BHOPAL CAMPUS DATASET
+       ========================================================================= */
+    const SOFT_SWATCHES = [
+      { name: 'Muted Slate', hex: '#9AA3AB' },
+      { name: 'Soft Sage', hex: '#7D9D8C' },
+      { name: 'Warm Ochre', hex: '#C8A27A' },
+      { name: 'Dusty Blue', hex: '#7A93AC' },
+      { name: 'Muted Lavender', hex: '#9B8EA9' },
+      { name: 'Soft Terracotta', hex: '#C28B82' }
+    ];
+
+    const INITIAL_MANIT_BUILDINGS = [
+      { name: 'Main Gate (Link Rd 3)', category: 'Gate', x: 115, y: 345 },
+      { name: 'Admin Block', category: 'Admin', x: 325, y: 370 },
+      { name: 'Central Library (LRC)', category: 'Library', x: 545, y: 260 },
+      { name: 'CSE Department', category: 'Academic', x: 465, y: 550 },
+      { name: 'New Teaching Block (NTB)', category: 'Academic', x: 645, y: 435 },
+      { name: 'ROLTA Incubation Centre', category: 'Academic', x: 740, y: 580 },
+      { name: 'Student Activity Centre (SAC)', category: 'Amenity', x: 960, y: 395 },
+      { name: 'Campus Canteen (Nescafe)', category: 'Canteen', x: 780, y: 245 },
+      { name: 'Sports Complex & Dispensary', category: 'Amenity', x: 1050, y: 170 },
+      { name: 'Boys Hostel Zone (Hostel 10)', category: 'Hostel', x: 1155, y: 470 },
+      { name: 'Kalpana Chawla Bhawan (H-7)', category: 'Hostel', x: 450, y: 105 },
+      { name: 'SBI Bank & Post Office', category: 'Amenity', x: 235, y: 165 }
+    ];
+
+    const INITIAL_MANIT_PATHWAYS = [
+      [0, 11, 180], [0, 1, 350], [11, 1, 220], [11, 10, 300],
+      [1, 2, 160], [1, 3, 240], [2, 4, 190], [2, 7, 140],
+      [3, 4, 170], [3, 5, 210], [4, 7, 150], [5, 6, 260],
+      [7, 6, 230], [6, 8, 200], [6, 9, 320], [8, 9, 280],
+      [10, 2, 340]
+    ];
+
+    /* =========================================================================
+       SECTION 3: SKETCH-STYLE SVG DOODLE ARTWORK FOR EACH BUILDING CATEGORY
+       ========================================================================= */
+    function getBuildingDoodleMarkup(category, accentStroke) {
+      const stroke = accentStroke || '#556068';
+      switch (category) {
+        case 'Gate':
+          // Arched Campus Entrance Gate Doodle
+          return `
+            <path d="M-19 13 H19" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-15" y="-4" width="6" height="17" rx="1" fill="#EFECE3" stroke="${stroke}" stroke-width="1.5"/>
+            <rect x="9" y="-4" width="6" height="17" rx="1" fill="#EFECE3" stroke="${stroke}" stroke-width="1.5"/>
+            <path d="M-18 -4 Q0 -17 18 -4 Z" fill="#E3EAE5" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M-9 13 V3 A9 8 0 0 1 9 3 V13" fill="none" stroke="${stroke}" stroke-width="1.4"/>
+          `;
+        case 'Admin':
+          // Classical Pediment & Pillars Admin Block Doodle
+          return `
+            <path d="M-19 13 H19" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M-17 -5 L0 -15 L17 -5 Z" fill="#EAE6DC" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+            <rect x="-14" y="-5" width="28" height="18" fill="#F5F3EC" stroke="${stroke}" stroke-width="1.5"/>
+            <line x1="-7" y1="-5" x2="-7" y2="13" stroke="${stroke}" stroke-width="1.4"/>
+            <line x1="0" y1="-5" x2="0" y2="13" stroke="${stroke}" stroke-width="1.4"/>
+            <line x1="7" y1="-5" x2="7" y2="13" stroke="${stroke}" stroke-width="1.4"/>
+            <circle cx="0" cy="-9" r="1.8" fill="${stroke}"/>
+          `;
+        case 'Library':
+          // Library Roof + Open Book LRC Doodle
+          return `
+            <rect x="-15" y="-6" width="30" height="19" rx="2" fill="#F4F2EA" stroke="${stroke}" stroke-width="1.5"/>
+            <path d="M-18 -6 L0 -15 L18 -6" fill="none" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M0 -1 V10 M0 -1 Q-6 -4 -10 -1 V8 Q-6 5 0 9 M0 -1 Q6 -4 10 -1 V8 Q6 5 0 9" fill="#E6EEE9" stroke="${stroke}" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/>
+          `;
+        case 'Hostel':
+          // Tall Multi-Story Hostel Bhawan Doodle
+          return `
+            <path d="M-16 14 H16" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-12" y="-13" width="24" height="27" rx="1.5" fill="#F2EFE7" stroke="${stroke}" stroke-width="1.5"/>
+            <path d="M-14 -13 H14" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-8" y="-9" width="4" height="4" fill="#DFE6E2" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="4" y="-9" width="4" height="4" fill="#DFE6E2" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="-8" y="-2" width="4" height="4" fill="#DFE6E2" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="4" y="-2" width="4" height="4" fill="#DFE6E2" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="-3" y="6" width="6" height="8" fill="#E5E1D6" stroke="${stroke}" stroke-width="1.2"/>
+          `;
+        case 'Canteen':
+          // Cozy Cafe Storefront with Striped Awning Doodle
+          return `
+            <rect x="-14" y="-3" width="28" height="16" rx="1.5" fill="#F6F3EB" stroke="${stroke}" stroke-width="1.5"/>
+            <path d="M-16 -3 L-13 -11 H13 L16 -3 Z" fill="#ECDDD6" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+            <line x1="-6" y1="-11" x2="-7" y2="-3" stroke="${stroke}" stroke-width="1.2"/>
+            <line x1="0" y1="-11" x2="0" y2="-3" stroke="${stroke}" stroke-width="1.2"/>
+            <line x1="6" y1="-11" x2="7" y2="-3" stroke="${stroke}" stroke-width="1.2"/>
+            <rect x="-8" y="2" width="9" height="6" rx="1" fill="#E5ECE8" stroke="${stroke}" stroke-width="1.2"/>
+            <line x1="5" y1="3" x2="5" y2="13" stroke="${stroke}" stroke-width="1.3"/>
+          `;
+        case 'Amenity':
+          // Campus Pavilion / Utility Building Doodle
+          return `
+            <path d="M-17 13 H17" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-13" y="-4" width="26" height="17" rx="1.5" fill="#F3F1EA" stroke="${stroke}" stroke-width="1.5"/>
+            <path d="M-16 -4 L0 -14 L16 -4 Z" fill="#E4EAE8" stroke="${stroke}" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M-4 13 V5 A4 4 0 0 1 4 5 V13" fill="#EAE6DC" stroke="${stroke}" stroke-width="1.3"/>
+          `;
+        case 'Academic':
+        default:
+          // Multi-Window Academic Department Doodle
+          return `
+            <path d="M-18 13 H18" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-15" y="-9" width="30" height="22" rx="1.5" fill="#F4F2EA" stroke="${stroke}" stroke-width="1.5"/>
+            <line x1="-17" y1="-9" x2="17" y2="-9" stroke="${stroke}" stroke-width="1.6" stroke-linecap="round"/>
+            <rect x="-10" y="-5" width="4.5" height="4.5" fill="#E1EAE5" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="-2.2" y="-5" width="4.5" height="4.5" fill="#E1EAE5" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="5.5" y="-5" width="4.5" height="4.5" fill="#E1EAE5" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="-10" y="3" width="4.5" height="4.5" fill="#E1EAE5" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="5.5" y="3" width="4.5" height="4.5" fill="#E1EAE5" stroke="${stroke}" stroke-width="1.1"/>
+            <rect x="-2.5" y="4" width="5" height="9" fill="#E6E2D7" stroke="${stroke}" stroke-width="1.2"/>
+          `;
+      }
+    }
+
+    /* =========================================================================
+       SECTION 4: APPLICATION STATE & DOM REFERENCES
+       ========================================================================= */
+    const graph = new CampusGraph();
+
+    const state = {
+      activeRoute: null,             // Stores latest Route Output object when highlighted
+      highlightedNodeStep: new Map(),// buildingId -> 1-based step index on active route
+      highlightedEdgeKeys: new Set(),// "minId-maxId" keys on active route
+      draggingNodeId: null,
+      dragOffset: { x: 0, y: 0 },
+      didDragMove: false,
+      isPanning: false,
+      panStart: { x: 0, y: 0 },
+      viewTransform: { x: 0, y: 0, scale: 1 },
+      connectModeSourceId: null,     // Active when user picks target directly on map
+      editingEdge: null,             // { u, v, color }
+      selectedConnectColor: '#9AA3AB',
+      editingBuildingId: null,       // null = adding new building, number = editing existing
+      pendingNewBuildingCoords: null // Optional canvas coordinates when right-clicking canvas
+    };
+
+    // DOM Elements
+    const campusSvg = document.getElementById('campusSvg');
+    const viewportGroup = document.getElementById('viewportGroup');
+    const edgesLayer = document.getElementById('edgesLayer');
+    const buildingsLayer = document.getElementById('buildingsLayer');
+    const rubberBandLine = document.getElementById('rubberBandLine');
+
+    const startSelect = document.getElementById('startSelect');
+    const endSelect = document.getElementById('endSelect');
+    const algoSelect = document.getElementById('algoSelect');
+    const contextMenu = document.getElementById('contextMenu');
+    const contextMenuHeader = document.getElementById('contextMenuHeader');
+    const contextMenuItems = document.getElementById('contextMenuItems');
+
+    /* =========================================================================
+       SECTION 5: COORDINATE HELPERS & TOAST NOTIFICATIONS
+       ========================================================================= */
+    function clientToWorldCoords(clientX, clientY) {
+      const pt = campusSvg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const svgPt = pt.matrixTransform(campusSvg.getScreenCTM().inverse());
+      return {
+        x: (svgPt.x - state.viewTransform.x) / state.viewTransform.scale,
+        y: (svgPt.y - state.viewTransform.y) / state.viewTransform.scale
+      };
+    }
+
+    function estimateMetersBetween(uId, vId) {
+      const u = graph.getVertex(uId);
+      const v = graph.getVertex(vId);
+      if (!u || !v) return 180;
+      const pxDist = Math.hypot(u.x - v.x, u.y - v.y);
+      // Scale pixel spacing nicely to realistic campus meters rounded to nearest 5m
+      return Math.max(40, Math.round((pxDist * 0.92) / 5) * 5);
+    }
+
+    let toastTimer = null;
+    function showToast(message) {
+      const banner = document.getElementById('toastBanner');
+      banner.textContent = message;
+      banner.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 2800);
+    }
+
+    function applyViewportTransform() {
+      viewportGroup.setAttribute(
+        'transform',
+        `translate(${state.viewTransform.x}, ${state.viewTransform.y}) scale(${state.viewTransform.scale})`
+      );
+      document.getElementById('btnZoomReset').textContent = `${Math.round(state.viewTransform.scale * 100)}%`;
+    }
+
+    /* =========================================================================
+       SECTION 6: INITIALIZE / RESET MANIT BHOPAL CAMPUS NETWORK
+       ========================================================================= */
+    function loadManitCampus() {
+      graph.vertices = [];
+      graph.nextId = 0;
+
+      INITIAL_MANIT_BUILDINGS.forEach(b => {
+        graph.addBuilding(b.name, b.category, b.x, b.y);
+      });
+
+      INITIAL_MANIT_PATHWAYS.forEach(([u, v, dist]) => {
+        graph.addOrUpdatePathway(u, v, dist, '#9AA3AB', false);
+      });
+
+      clearRouteHighlight();
+      state.viewTransform = { x: 0, y: 0, scale: 1 };
+      applyViewportTransform();
+
+      populateLocationDropdowns(0, 9); // Default: Main Gate -> Boys Hostel Zone (Hostel 10)
+      renderAll();
+    }
+
+    function populateLocationDropdowns(preferredStartId = null, preferredEndId = null) {
+      const prevStart = preferredStartId !== null ? preferredStartId : parseInt(startSelect.value, 10);
+      const prevEnd = preferredEndId !== null ? preferredEndId : parseInt(endSelect.value, 10);
+
+      const optionsHtml = graph.vertices
+        .map(v => `<option value="${v.id}">[${v.id}] ${escapeHtml(v.name)}</option>`)
+        .join('');
+
+      startSelect.innerHTML = optionsHtml;
+      endSelect.innerHTML = optionsHtml;
+
+      if (graph.getVertex(prevStart)) {
+        startSelect.value = String(prevStart);
+      } else if (graph.vertices.length > 0) {
+        startSelect.value = String(graph.vertices[0].id);
+      }
+
+      if (graph.getVertex(prevEnd)) {
+        endSelect.value = String(prevEnd);
+      } else if (graph.vertices.length > 1) {
+        endSelect.value = String(graph.vertices[graph.vertices.length - 1].id);
+      }
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function truncateLabel(str, maxLen = 24) {
+      return str.length > maxLen ? str.slice(0, maxLen - 1) + '…' : str;
+    }
+
+    /* =========================================================================
+       SECTION 7: RENDERING GRAPH EDGES, DOODLE BUILDINGS & LIVE DSA VIEW
+       ========================================================================= */
+    function renderAll() {
+      renderEdges();
+      renderBuildings();
+      renderAdjacencyListDrawer();
+      updateCounters();
+    }
+
+    function updateCounters() {
+      const pathways = graph.getAllUniquePathways();
+      const blockedCount = pathways.filter(p => p.isBlocked).length;
+      document.getElementById('badgeEdgeCount').textContent = pathways.length;
+      document.getElementById('statVertices').textContent = graph.vertices.length;
+      document.getElementById('statEdges').textContent = pathways.length;
+      document.getElementById('statBlocked').textContent = blockedCount;
+    }
+
+    function renderEdges() {
+      const pathways = graph.getAllUniquePathways();
+      const hasActiveRoute = state.activeRoute && state.activeRoute.connected;
+
+      let svgHtml = '';
+
+      pathways.forEach(edge => {
+        const uNode = graph.getVertex(edge.u);
+        const vNode = graph.getVertex(edge.v);
+        if (!uNode || !vNode) return;
+
+        const key = edge.u < edge.v ? `${edge.u}-${edge.v}` : `${edge.v}-${edge.u}`;
+        const isRouteEdge = hasActiveRoute && state.highlightedEdgeKeys.has(key);
+
+        const midX = (uNode.x + vNode.x) / 2;
+        const midY = (uNode.y + vNode.y) / 2;
+
+        // Visual styling based on Open / Blocked / Highlighted Route state
+        let strokeColor = edge.color || '#9AA3AB';
+        let strokeWidth = 2.4;
+        let dashAttr = '';
+        let opacity = hasActiveRoute && !isRouteEdge ? 0.34 : 0.95;
+
+        if (edge.isBlocked) {
+          strokeColor = '#C4837A';
+          dashAttr = 'stroke-dasharray="7 5"';
+          strokeWidth = 2.2;
+        } else if (isRouteEdge) {
+          strokeColor = '#528B78';
+          strokeWidth = 4.2;
+          opacity = 1;
+        }
+
+        const labelText = edge.isBlocked ? `${edge.distance}m · Blocked` : `${edge.distance}m`;
+        const pillWidth = edge.isBlocked ? 88 : 48;
+        const pillFill = edge.isBlocked ? '#F7ECEA' : (isRouteEdge ? '#E5F0EC' : '#FAFAF7');
+        const pillBorder = edge.isBlocked ? '#D9B1AA' : (isRouteEdge ? '#8AB5A5' : '#D8D4C8');
+        const pillText = edge.isBlocked ? '#A65E55' : (isRouteEdge ? '#356353' : '#646B72');
+
+        svgHtml += `
+          <g class="edge-group" data-u="${edge.u}" data-v="${edge.v}" opacity="${opacity}">
+            <!-- Wide transparent hit area for effortless right-click & click -->
+            <line x1="${uNode.x}" y1="${uNode.y}" x2="${vNode.x}" y2="${vNode.y}" stroke="transparent" stroke-width="20" stroke-linecap="round" />
+
+            ${isRouteEdge ? `
+              <!-- Soft sage halo under active route -->
+              <line x1="${uNode.x}" y1="${uNode.y}" x2="${vNode.x}" y2="${vNode.y}" stroke="#B8D6C9" stroke-width="9" stroke-linecap="round" opacity="0.65" />
+            ` : ''}
+
+            <!-- Main pathway line -->
+            <line class="edge-visible-line" x1="${uNode.x}" y1="${uNode.y}" x2="${vNode.x}" y2="${vNode.y}"
+                  stroke="${strokeColor}" stroke-width="${strokeWidth}" ${dashAttr} stroke-linecap="round" />
+
+            ${isRouteEdge ? `
+              <!-- Subtle directional flow overlay -->
+              <line x1="${uNode.x}" y1="${uNode.y}" x2="${vNode.x}" y2="${vNode.y}"
+                    stroke="#EAF3EF" stroke-width="1.6" class="route-animated-dash" stroke-linecap="round" />
+            ` : ''}
+
+            <!-- Distance & Blocked Status Midpoint Pill -->
+            <g transform="translate(${midX}, ${midY})">
+              <rect class="edge-pill-bg" x="${-pillWidth / 2}" y="-10" width="${pillWidth}" height="20" rx="10"
+                    fill="${pillFill}" stroke="${pillBorder}" stroke-width="1.1" />
+              <text x="0" y="3.5" text-anchor="middle" font-size="10.5" font-weight="500" fill="${pillText}">${labelText}</text>
+            </g>
+          </g>
+        `;
+      });
+
+      edgesLayer.innerHTML = svgHtml;
+    }
+
+    function renderBuildings() {
+      const hasActiveRoute = state.activeRoute && state.activeRoute.connected;
+      let svgHtml = '';
+
+      graph.vertices.forEach(b => {
+        const stepNum = state.highlightedNodeStep.get(b.id);
+        const isRouteBuilding = Boolean(stepNum);
+        const isConnectSource = state.connectModeSourceId === b.id;
+
+        const cardFill = isRouteBuilding ? '#F2F8F5' : '#FDFCF9';
+        const cardStroke = isRouteBuilding ? '#528B78' : (isConnectSource ? '#5E9380' : '#D2CEC2');
+        const cardStrokeWidth = isRouteBuilding || isConnectSource ? 2.2 : 1.3;
+        const doodleStroke = isRouteBuilding ? '#3E6E5D' : '#58636B';
+        const nodeOpacity = hasActiveRoute && !isRouteBuilding ? 0.62 : 1;
+        const filterAttr = isRouteBuilding ? 'url(#routeNodeGlow)' : 'url(#softCardShadow)';
+
+        const shortName = escapeHtml(truncateLabel(b.name, 25));
+        const pillWidth = Math.max(88, shortName.length * 6.3 + 18);
+
+        svgHtml += `
+          <g class="building-node" data-id="${b.id}" transform="translate(${b.x}, ${b.y})" opacity="${nodeOpacity}">
+            <!-- Rounded Doodle Card -->
+            <rect class="building-card-bg" x="-29" y="-25" width="58" height="48" rx="13"
+                  fill="${cardFill}" stroke="${cardStroke}" stroke-width="${cardStrokeWidth}" filter="${filterAttr}" />
+
+            <!-- Sketch Building Doodle -->
+            <g transform="translate(0, -1)">
+              ${getBuildingDoodleMarkup(b.category, doodleStroke)}
+            </g>
+
+            <!-- Small ID Badge (Top-Right) -->
+            <g transform="translate(24, -21)">
+              <circle r="8.5" fill="#EFECE3" stroke="#D2CEC2" stroke-width="1" />
+              <text x="0" y="3" text-anchor="middle" font-size="9.5" font-weight="600" fill="#636A70">${b.id}</text>
+            </g>
+
+            ${isRouteBuilding ? `
+              <!-- Route Step Order Badge (Top-Left) -->
+              <g transform="translate(-24, -21)">
+                <circle r="9.5" fill="#528B78" stroke="#FDFCF9" stroke-width="1.5" />
+                <text x="0" y="3.5" text-anchor="middle" font-size="10" font-weight="700" fill="#FDFCF9">${stepNum}</text>
+              </g>
+            ` : ''}
+
+            <!-- Building Name Label Underneath -->
+            <g transform="translate(0, 36)">
+              <rect x="${-pillWidth / 2}" y="-10" width="${pillWidth}" height="20" rx="7"
+                    fill="${isRouteBuilding ? '#E6F0EC' : '#FAFAF7'}"
+                    stroke="${isRouteBuilding ? '#9BC0B3' : '#DFDCD2'}" stroke-width="1" />
+              <text x="0" y="3.5" text-anchor="middle" font-size="11" font-weight="${isRouteBuilding ? '600' : '500'}"
+                    fill="${isRouteBuilding ? '#2F594A' : '#3D4449'}">${shortName}</text>
+            </g>
+          </g>
+        `;
+      });
+
+      buildingsLayer.innerHTML = svgHtml;
+    }
+
+    /**
+     * Updates a dragged building's position & attached lines smoothly without rebuilding the entire DOM
+     */
+    function renderAdjacencyListDrawer() {
+      const container = document.getElementById('adjacencyListContainer');
+      if (container.offsetParent === null && document.getElementById('dsaDrawer').classList.contains('hidden')) {
+        return; // Skip work if drawer is closed
+      }
+
+      let html = '';
+      graph.vertices.forEach(v => {
+        let chainBadges = '';
+        let curr = v.head;
+
+        while (curr !== null) {
+          const target = graph.getVertex(curr.destId);
+          const targetName = target ? target.name.split('(')[0].trim() : `#${curr.destId}`;
+          const badgeStyle = curr.isBlocked
+            ? 'bg-[#F5E6E4] border-[#DAB5AF] text-[#9E5950] line-through'
+            : 'bg-[#F0EFE8] border-[#D8D4C8] text-[#454C52]';
+
+          chainBadges += `
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[11px] mono-font ${badgeStyle}">
+              [${curr.destId}:${escapeHtml(truncateLabel(targetName, 12))} | ${curr.distance}m${curr.isBlocked ? ' | BLK' : ''}]
+            </span>
+            <span class="text-[#9AA3AB] text-[11px]">→</span>
+          `;
+          curr = curr.next;
+        }
+
+        chainBadges += `<span class="text-[11px] mono-font text-[#8C9399]">NULL</span>`;
+
+        html += `
+          <div class="p-2.5 rounded-xl bg-[#FDFCF9] border border-[#E3E0D6] hover:border-[#BDCEC5] transition"
+               onmouseenter="pulseBuildingCard(${v.id})" onmouseleave="unpulseBuildingCard()">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-[12px] font-semibold text-[#3D4449]">campus[${v.id}]: ${escapeHtml(v.name)}</span>
+              <span class="text-[10.5px] px-1.5 py-0.2 rounded bg-[#EFECE3] text-[#6E757C]">head</span>
+            </div>
+            <div class="flex flex-wrap items-center gap-1 leading-relaxed">
+              ${chainBadges}
+            </div>
+          </div>
+        `;
+      });
+
+      container.innerHTML = html;
+    }
+
+    window.pulseBuildingCard = function(id) {
+      const nodeEl = buildingsLayer.querySelector(`.building-node[data-id="${id}"] .building-card-bg`);
+      if (nodeEl) {
+        nodeEl.setAttribute('stroke', '#5E9380');
+        nodeEl.setAttribute('stroke-width', '2.8');
+      }
+    };
+
+    window.unpulseBuildingCard = function() {
+      renderBuildings();
+    };
+
+    /* =========================================================================
+       SECTION 8: DRAG-AND-DROP BUILDINGS, PANNING & RUBBER-BAND CONNECT MODE
+       ========================================================================= */
+    function startInteractiveConnectMode(sourceId) {
+      state.connectModeSourceId = sourceId;
+      const src = graph.getVertex(sourceId);
+      if (!src) return;
+
+      document.getElementById('connectModeText').textContent =
+        `Connecting from "${truncateLabel(src.name, 22)}" — click another building`;
+      const banner = document.getElementById('connectModeBanner');
+      banner.classList.remove('hidden');
+      banner.classList.add('flex');
+
+      rubberBandLine.setAttribute('x1', src.x);
+      rubberBandLine.setAttribute('y1', src.y);
+      rubberBandLine.setAttribute('x2', src.x);
+      rubberBandLine.setAttribute('y2', src.y);
+      rubberBandLine.classList.remove('hidden');
+      renderBuildings();
+    }
+
+    function cancelInteractiveConnectMode() {
+      state.connectModeSourceId = null;
+      const banner = document.getElementById('connectModeBanner');
+      banner.classList.add('hidden');
+      banner.classList.remove('flex');
+      rubberBandLine.classList.add('hidden');
+      renderBuildings();
+    }
+
+    document.getElementById('btnCancelConnectMode').addEventListener('click', cancelInteractiveConnectMode);
+
+    // Pointer Down on SVG (Building Drag OR Canvas Pan)
+    campusSvg.addEventListener('pointerdown', (e) => {
+      hideContextMenu();
+      if (e.button !== 0) return; // Left-click / primary touch only
+
+      const buildingEl = e.target.closest('.building-node');
+      const edgeEl = e.target.closest('.edge-group');
+
+      if (buildingEl) {
+        const id = parseInt(buildingEl.dataset.id, 10);
+
+        // If currently in "Pick Target on Map" rubber-band mode, finish connection!
+        if (state.connectModeSourceId !== null) {
+          const srcId = state.connectModeSourceId;
+          cancelInteractiveConnectMode();
+          if (srcId !== id) {
+            openConnectModal(srcId, id);
+          } else {
+            showToast('Select a different building to connect.');
+          }
+          return;
+        }
+
+        const v = graph.getVertex(id);
+        if (!v) return;
+        const worldPt = clientToWorldCoords(e.clientX, e.clientY);
+        state.draggingNodeId = id;
+        state.didDragMove = false;
+        state.dragOffset.x = v.x - worldPt.x;
+        state.dragOffset.y = v.y - worldPt.y;
+        campusSvg.setPointerCapture(e.pointerId);
+        return;
+      }
+
+      // Clicking a pathway pill/line with left-click also opens Edge Settings for easy trackpad/touch use
+      if (edgeEl && state.connectModeSourceId === null) {
+        const u = parseInt(edgeEl.dataset.u, 10);
+        const v = parseInt(edgeEl.dataset.v, 10);
+        openEdgeSettingsModal(u, v);
+        return;
+      }
+
+      // Otherwise pan the canvas gently
+      if (e.target.id === 'svgBgRect' || e.target.id === 'campusSvg') {
+        state.isPanning = true;
+        state.panStart = {
+          x: e.clientX - state.viewTransform.x,
+          y: e.clientY - state.viewTransform.y
+        };
+        campusSvg.setPointerCapture(e.pointerId);
+      }
+    });
+
+    campusSvg.addEventListener('pointermove', (e) => {
+      // Update rubber-band line if in interactive connect mode
+      if (state.connectModeSourceId !== null) {
+        const worldPt = clientToWorldCoords(e.clientX, e.clientY);
+        rubberBandLine.setAttribute('x2', worldPt.x);
+        rubberBandLine.setAttribute('y2', worldPt.y);
+      }
+
+      if (state.draggingNodeId !== null) {
+        const v = graph.getVertex(state.draggingNodeId);
+        if (!v) return;
+        const worldPt = clientToWorldCoords(e.clientX, e.clientY);
+        const nextX = Math.round(worldPt.x + state.dragOffset.x);
+        const nextY = Math.round(worldPt.y + state.dragOffset.y);
+
+        if (Math.hypot(nextX - v.x, nextY - v.y) > 2) {
+          state.didDragMove = true;
+        }
+        v.x = nextX;
+        v.y = nextY;
+        renderEdges();
+        renderBuildings();
+        return;
+      }
+
+      if (state.isPanning) {
+        state.viewTransform.x = e.clientX - state.panStart.x;
+        state.viewTransform.y = e.clientY - state.panStart.y;
+        applyViewportTransform();
+      }
+    });
+
+    campusSvg.addEventListener('pointerup', (e) => {
+      if (state.draggingNodeId !== null) {
+        state.draggingNodeId = null;
+      }
+      if (state.isPanning) {
+        state.isPanning = false;
+      }
+      if (campusSvg.hasPointerCapture(e.pointerId)) {
+        campusSvg.releasePointerCapture(e.pointerId);
+      }
+    });
+
+    /* =========================================================================
+       SECTION 9: RIGHT-CLICK CONTEXT MENUS (BUILDINGS, EDGES & CANVAS)
+       ========================================================================= */
+    campusSvg.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      cancelInteractiveConnectMode();
+
+      const buildingEl = e.target.closest('.building-node');
+      const edgeEl = e.target.closest('.edge-group');
+
+      // 1. RIGHT-CLICK ON A BUILDING DOODLE
+      if (buildingEl) {
+        const id = parseInt(buildingEl.dataset.id, 10);
+        const b = graph.getVertex(id);
+        if (!b) return;
+
+        showContextMenu(e.clientX, e.clientY, `[${b.id}] ${b.name}`, [
+          {
+            label: 'Connect Pathway (Dialog)…',
+            action: () => openConnectModal(id, null)
+          },
+          {
+            label: 'Draw Pathway on Map…',
+            action: () => startInteractiveConnectMode(id)
+          },
+          { divider: true },
+          {
+            label: 'Set as Start Building',
+            action: () => {
+              startSelect.value = String(id);
+              showToast(`Start set to "${b.name}"`);
+            }
+          },
+          {
+            label: 'Set as Destination Building',
+            action: () => {
+              endSelect.value = String(id);
+              showToast(`Destination set to "${b.name}"`);
+            }
+          },
+          { divider: true },
+          {
+            label: 'Edit Building Name / Icon…',
+            action: () => openBuildingModal(id)
+          },
+          {
+            label: 'Remove Building',
+            danger: true,
+            action: () => {
+              if (graph.vertices.length <= 2) {
+                showToast('Keep at least 2 buildings in the campus network.');
+                return;
+              }
+              const removedName = b.name;
+              graph.removeBuilding(id);
+              clearRouteHighlight();
+              populateLocationDropdowns();
+              renderAll();
+              showToast(`Removed "${removedName}" and unlinked its pathways.`);
+            }
+          }
+        ]);
+        return;
+      }
+
+      // 2. RIGHT-CLICK ON AN EDGE (PATHWAY LINE) -> OPEN EDGE SETTINGS DIALOG DIRECTLY
+      if (edgeEl) {
+        hideContextMenu();
+        const u = parseInt(edgeEl.dataset.u, 10);
+        const v = parseInt(edgeEl.dataset.v, 10);
+        openEdgeSettingsModal(u, v);
+        return;
+      }
+
+      // 3. RIGHT-CLICK ON EMPTY CANVAS -> QUICK ADD BUILDING AT CURSOR
+      const worldCoords = clientToWorldCoords(e.clientX, e.clientY);
+      showContextMenu(e.clientX, e.clientY, 'Campus Map Actions', [
+        {
+          label: '+ Add Building Here…',
+          action: () => openBuildingModal(null, { x: Math.round(worldCoords.x), y: Math.round(worldCoords.y) })
+        },
+        {
+          label: 'Open Connections Manager…',
+          action: () => openConnectionsManager()
+        }
+      ]);
+    });
+
+    function showContextMenu(clientX, clientY, title, items) {
+      contextMenuHeader.textContent = title;
+      contextMenuItems.innerHTML = '';
+
+      items.forEach(item => {
+        if (item.divider) {
+          const hr = document.createElement('div');
+          hr.className = 'my-1 border-t border-[#E6E3DA]';
+          contextMenuItems.appendChild(hr);
+          return;
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `w-full text-left px-3 py-1.5 transition flex items-center justify-between ${
+          item.danger ? 'text-[#B0655C] hover:bg-[#F5E7E5]' : 'text-[#3D4449] hover:bg-[#EFECE3]'
+        }`;
+        btn.textContent = item.label;
+        btn.addEventListener('click', () => {
+          hideContextMenu();
+          item.action();
+        });
+        contextMenuItems.appendChild(btn);
+      });
+
+      contextMenu.classList.remove('hidden');
+      const rect = contextMenu.getBoundingClientRect();
+      const clampedX = Math.min(clientX, window.innerWidth - rect.width - 12);
+      const clampedY = Math.min(clientY, window.innerHeight - rect.height - 12);
+      contextMenu.style.left = `${Math.max(8, clampedX)}px`;
+      contextMenu.style.top = `${Math.max(8, clampedY)}px`;
+    }
+
+    function hideContextMenu() {
+      contextMenu.classList.add('hidden');
+    }
+
+    window.addEventListener('click', (e) => {
+      if (!contextMenu.contains(e.target)) hideContextMenu();
+    });
+
+    /* =========================================================================
+       SECTION 10: EDGE SETTINGS DIALOG (COLOR SWATCHES + isBlocked TOGGLE)
+       ========================================================================= */
+    function renderColorSwatchButtons(containerId, currentColor, onSelect) {
+      const container = document.getElementById(containerId);
+      container.innerHTML = '';
+      SOFT_SWATCHES.forEach(sw => {
+        const isSelected = sw.hex.toLowerCase() === currentColor.toLowerCase();
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.title = sw.name;
+        btn.className = `w-7 h-7 rounded-full border-2 transition ${
+          isSelected ? 'border-[#3D4449] scale-110' : 'border-[#E2DFD5] hover:scale-105'
+        }`;
+        btn.style.backgroundColor = sw.hex;
+        btn.addEventListener('click', () => {
+          onSelect(sw.hex);
+          renderColorSwatchButtons(containerId, sw.hex, onSelect);
+        });
+        container.appendChild(btn);
+      });
+    }
+
+    function openEdgeSettingsModal(u, v) {
+      const edge = graph.findDirectedEdge(u, v);
+      const nodeU = graph.getVertex(u);
+      const nodeV = graph.getVertex(v);
+      if (!edge || !nodeU || !nodeV) return;
+
+      state.editingEdge = { u, v, color: edge.color || '#9AA3AB' };
+
+      document.getElementById('edgeModalSubtitle').textContent = `${nodeU.name} ↔ ${nodeV.name}`;
+      document.getElementById('edgeBlockedToggle').checked = edge.isBlocked;
+      document.getElementById('edgeDistanceInput').value = edge.distance;
+      document.getElementById('edgeCustomColorInput').value = edge.color || '#9AA3AB';
+
+      renderColorSwatchButtons('edgeColorSwatches', state.editingEdge.color, (hex) => {
+        state.editingEdge.color = hex;
+        document.getElementById('edgeCustomColorInput').value = hex;
+      });
+
+      document.getElementById('edgeSettingsModal').classList.remove('hidden');
+    }
+
+    document.getElementById('edgeCustomColorInput').addEventListener('input', (e) => {
+      if (!state.editingEdge) return;
+      state.editingEdge.color = e.target.value;
+      renderColorSwatchButtons('edgeColorSwatches', e.target.value, (hex) => {
+        state.editingEdge.color = hex;
+        document.getElementById('edgeCustomColorInput').value = hex;
+      });
+    });
+
+    document.getElementById('btnAutoCalcEdgeDist').addEventListener('click', () => {
+      if (!state.editingEdge) return;
+      document.getElementById('edgeDistanceInput').value =
+        estimateMetersBetween(state.editingEdge.u, state.editingEdge.v);
+    });
+
+    document.getElementById('btnSaveEdgeSettings').addEventListener('click', () => {
+      if (!state.editingEdge) return;
+      const { u, v, color } = state.editingEdge;
+      const isBlocked = document.getElementById('edgeBlockedToggle').checked;
+      const dist = Math.max(5, parseInt(document.getElementById('edgeDistanceInput').value, 10) || 100);
+
+      graph.setPathwayBlocked(u, v, isBlocked);
+      graph.setPathwayColor(u, v, color);
+      graph.setPathwayDistance(u, v, dist);
+
+      document.getElementById('edgeSettingsModal').classList.add('hidden');
+
+      // If a route was currently highlighted, automatically recompute it so rerouting shows immediately!
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+
+      showToast(isBlocked ? 'Pathway marked as BLOCKED.' : 'Pathway settings updated.');
+    });
+
+    document.getElementById('btnDeleteEdge').addEventListener('click', () => {
+      if (!state.editingEdge) return;
+      const { u, v } = state.editingEdge;
+      graph.removePathway(u, v);
+      document.getElementById('edgeSettingsModal').classList.add('hidden');
+
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+      showToast('Pathway unlinked from Adjacency List.');
+    });
+
+    /* =========================================================================
+       SECTION 11: CONNECT TWO BUILDINGS MODAL & MANUAL BUILDING MODAL
+       ========================================================================= */
+    function openConnectModal(srcId = null, destId = null) {
+      const srcSel = document.getElementById('connectSrcSelect');
+      const destSel = document.getElementById('connectDestSelect');
+
+      const opts = graph.vertices
+        .map(v => `<option value="${v.id}">[${v.id}] ${escapeHtml(v.name)}</option>`)
+        .join('');
+      srcSel.innerHTML = opts;
+      destSel.innerHTML = opts;
+
+      if (srcId !== null && graph.getVertex(srcId)) {
+        srcSel.value = String(srcId);
+      }
+      if (destId !== null && graph.getVertex(destId)) {
+        destSel.value = String(destId);
+      } else {
+        const fallback = graph.vertices.find(v => v.id !== parseInt(srcSel.value, 10));
+        if (fallback) destSel.value = String(fallback.id);
+      }
+
+      const u = parseInt(srcSel.value, 10);
+      const v = parseInt(destSel.value, 10);
+      const existing = graph.findDirectedEdge(u, v);
+
+      document.getElementById('connectDistInput').value =
+        existing ? existing.distance : estimateMetersBetween(u, v);
+      state.selectedConnectColor = existing ? existing.color : '#9AA3AB';
+
+      renderColorSwatchButtons('connectColorSwatches', state.selectedConnectColor, (hex) => {
+        state.selectedConnectColor = hex;
+      });
+
+      document.getElementById('connectBuildingModal').classList.remove('hidden');
+    }
+
+    document.getElementById('connectDestSelect').addEventListener('change', () => {
+      const u = parseInt(document.getElementById('connectSrcSelect').value, 10);
+      const v = parseInt(document.getElementById('connectDestSelect').value, 10);
+      const existing = graph.findDirectedEdge(u, v);
+      document.getElementById('connectDistInput').value =
+        existing ? existing.distance : estimateMetersBetween(u, v);
+    });
+
+    document.getElementById('btnEstimateConnectDist').addEventListener('click', () => {
+      const u = parseInt(document.getElementById('connectSrcSelect').value, 10);
+      const v = parseInt(document.getElementById('connectDestSelect').value, 10);
+      document.getElementById('connectDistInput').value = estimateMetersBetween(u, v);
+    });
+
+    document.getElementById('btnPickOnMapFromModal').addEventListener('click', () => {
+      const u = parseInt(document.getElementById('connectSrcSelect').value, 10);
+      document.getElementById('connectBuildingModal').classList.add('hidden');
+      startInteractiveConnectMode(u);
+    });
+
+    document.getElementById('btnConfirmConnect').addEventListener('click', () => {
+      const u = parseInt(document.getElementById('connectSrcSelect').value, 10);
+      const v = parseInt(document.getElementById('connectDestSelect').value, 10);
+      const dist = Math.max(5, parseInt(document.getElementById('connectDistInput').value, 10) || 150);
+
+      if (u === v) {
+        showToast('Please choose two different buildings.');
+        return;
+      }
+
+      graph.addOrUpdatePathway(u, v, dist, state.selectedConnectColor, false);
+      document.getElementById('connectBuildingModal').classList.add('hidden');
+
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+      showToast(`Connected ${graph.getVertex(u).name} ↔ ${graph.getVertex(v).name} (${dist}m)`);
+    });
+
+    // Manual Add / Edit Building Modal
+    function openBuildingModal(editId = null, customCoords = null) {
+      state.editingBuildingId = editId;
+      state.pendingNewBuildingCoords = customCoords;
+
+      const titleEl = document.getElementById('buildingModalTitle');
+      const nameInput = document.getElementById('buildingNameInput');
+      const catSelect = document.getElementById('buildingCategorySelect');
+      const initConnSec = document.getElementById('initialConnectionSection');
+      const connSel = document.getElementById('newBuildingConnectSelect');
+
+      if (editId !== null) {
+        const b = graph.getVertex(editId);
+        if (!b) return;
+        titleEl.textContent = `Edit Building [${b.id}]`;
+        nameInput.value = b.name;
+        catSelect.value = b.category;
+        initConnSec.classList.add('hidden');
+      } else {
+        titleEl.textContent = 'Add Campus Building Node';
+        nameInput.value = '';
+        catSelect.value = 'Academic';
+        initConnSec.classList.remove('hidden');
+
+        connSel.innerHTML =
+          `<option value="">— None (Add standalone node) —</option>` +
+          graph.vertices.map(v => `<option value="${v.id}">[${v.id}] ${escapeHtml(v.name)}</option>`).join('');
+      }
+
+      document.getElementById('buildingModal').classList.remove('hidden');
+      setTimeout(() => nameInput.focus(), 50);
+    }
+
+    document.getElementById('btnOpenAddBuilding').addEventListener('click', () => openBuildingModal(null));
+
+    document.getElementById('btnSaveBuilding').addEventListener('click', () => {
+      const name = document.getElementById('buildingNameInput').value.trim();
+      const category = document.getElementById('buildingCategorySelect').value;
+
+      if (!name) {
+        showToast('Please enter a building name.');
+        return;
+      }
+
+      if (state.editingBuildingId !== null) {
+        graph.updateBuilding(state.editingBuildingId, name, category);
+        populateLocationDropdowns();
+        renderAll();
+        document.getElementById('buildingModal').classList.add('hidden');
+        showToast(`Updated building "${name}".`);
+        return;
+      }
+
+      // Compute gentle open placement if user didn't right-click a specific spot
+      let x = 640 + ((graph.vertices.length % 5) - 2) * 85;
+      let y = 340 + (((graph.vertices.length * 3) % 5) - 2) * 65;
+      if (state.pendingNewBuildingCoords) {
+        x = state.pendingNewBuildingCoords.x;
+        y = state.pendingNewBuildingCoords.y;
+      }
+
+      const newVertex = graph.addBuilding(name, category, x, y);
+
+      const connectTargetVal = document.getElementById('newBuildingConnectSelect').value;
+      if (connectTargetVal !== '') {
+        const targetId = parseInt(connectTargetVal, 10);
+        const dist = Math.max(10, parseInt(document.getElementById('newBuildingDistInput').value, 10) || 200);
+        graph.addOrUpdatePathway(newVertex.id, targetId, dist, '#9AA3AB', false);
+      }
+
+      populateLocationDropdowns();
+      renderAll();
+      document.getElementById('buildingModal').classList.add('hidden');
+      showToast(`Added "${name}" to MANIT campus map.`);
+    });
+
+    /* =========================================================================
+       SECTION 12: CONNECTIONS TAB / MANAGER MODAL
+       ========================================================================= */
+    function openConnectionsManager() {
+      const srcSel = document.getElementById('tabConnSrc');
+      const destSel = document.getElementById('tabConnDest');
+      const opts = graph.vertices
+        .map(v => `<option value="${v.id}">[${v.id}] ${escapeHtml(v.name)}</option>`)
+        .join('');
+      srcSel.innerHTML = opts;
+      destSel.innerHTML = opts;
+      if (graph.vertices.length > 1) {
+        destSel.value = String(graph.vertices[1].id);
+      }
+
+      renderConnectionsTable();
+      document.getElementById('connectionsModal').classList.remove('hidden');
+    }
+
+    function renderConnectionsTable() {
+      const tbody = document.getElementById('connectionsTableBody');
+      const pathways = graph.getAllUniquePathways();
+
+      if (pathways.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-[#727980]">No pathways connected yet.</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = pathways
+        .map(p => {
+          const nameU = graph.getVertex(p.u)?.name || `#${p.u}`;
+          const nameV = graph.getVertex(p.v)?.name || `#${p.v}`;
+          return `
+            <tr class="hover:bg-[#F3F1EA]/70">
+              <td class="py-2.5 pr-2 font-medium text-[#3D4449]">
+                ${escapeHtml(nameU)} <span class="text-[#8B939A] mx-1">↔</span> ${escapeHtml(nameV)}
+              </td>
+              <td class="py-2.5 pr-2 mono-font text-[12px] text-[#565E65]">${p.distance}m</td>
+              <td class="py-2.5 pr-2">
+                <button type="button" onclick="openEdgeFromTable(${p.u}, ${p.v})"
+                        class="w-5 h-5 rounded-full border border-[#C6C2B6] align-middle"
+                        style="background:${p.color}" title="Edit Color & Settings"></button>
+              </td>
+              <td class="py-2.5 pr-2">
+                <button type="button" onclick="quickToggleBlockFromTable(${p.u}, ${p.v})"
+                        class="px-2.5 py-0.5 rounded-full text-[11px] font-medium border transition ${
+                          p.isBlocked
+                            ? 'bg-[#F5E6E4] border-[#DAB5AF] text-[#A35B52]'
+                            : 'bg-[#E9F0EC] border-[#C2D6CC] text-[#3E6B5C]'
+                        }">
+                  ${p.isBlocked ? 'Blocked (Click to Open)' : 'Open (Click to Block)'}
+                </button>
+              </td>
+              <td class="py-2.5 text-right space-x-2">
+                <button type="button" onclick="openEdgeFromTable(${p.u}, ${p.v})" class="text-[11.5px] text-[#5E9380] hover:underline font-medium">Edit</button>
+                <button type="button" onclick="deleteEdgeFromTable(${p.u}, ${p.v})" class="text-[11.5px] text-[#B0655C] hover:underline font-medium">Remove</button>
+              </td>
+            </tr>
+          `;
+        })
+        .join('');
+    }
+
+    window.quickToggleBlockFromTable = function(u, v) {
+      const edge = graph.findDirectedEdge(u, v);
+      if (!edge) return;
+      graph.setPathwayBlocked(u, v, !edge.isBlocked);
+      renderConnectionsTable();
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+    };
+
+    window.openEdgeFromTable = function(u, v) {
+      document.getElementById('connectionsModal').classList.add('hidden');
+      openEdgeSettingsModal(u, v);
+    };
+
+    window.deleteEdgeFromTable = function(u, v) {
+      graph.removePathway(u, v);
+      renderConnectionsTable();
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+      showToast('Pathway removed.');
+    };
+
+    document.getElementById('btnOpenConnectionsTab').addEventListener('click', openConnectionsManager);
+
+    document.getElementById('btnTabAddConn').addEventListener('click', () => {
+      const u = parseInt(document.getElementById('tabConnSrc').value, 10);
+      const v = parseInt(document.getElementById('tabConnDest').value, 10);
+      const dist = Math.max(10, parseInt(document.getElementById('tabConnDist').value, 10) || 180);
+
+      if (u === v) {
+        showToast('Select two distinct buildings to connect.');
+        return;
+      }
+
+      graph.addOrUpdatePathway(u, v, dist, '#9AA3AB', false);
+      renderConnectionsTable();
+      if (state.activeRoute) {
+        executeRouteSearch(false);
+      } else {
+        renderAll();
+      }
+      showToast('Pathway saved.');
+    });
+
+    /* =========================================================================
+       SECTION 13: ROUTE SEARCH, GRAPH HIGHLIGHTING & ROUTE OUTPUT POP-UP
+       ========================================================================= */
+    function executeRouteSearch(openPopupModal = true) {
+      const startId = parseInt(startSelect.value, 10);
+      const endId = parseInt(endSelect.value, 10);
+      const method = algoSelect.value;
+
+      if (isNaN(startId) || isNaN(endId)) return;
+
+      const result = method === 'dijkstra'
+        ? graph.findRouteDijkstra(startId, endId)
+        : graph.findRouteBFS(startId, endId);
+
+      state.activeRoute = result;
+      state.highlightedNodeStep.clear();
+      state.highlightedEdgeKeys.clear();
+
+      if (result.connected) {
+        result.path.forEach((nodeId, idx) => {
+          state.highlightedNodeStep.set(nodeId, idx + 1);
+        });
+        for (let i = 0; i < result.path.length - 1; i++) {
+          const a = result.path[i];
+          const b = result.path[i + 1];
+          const key = a < b ? `${a}-${b}` : `${b}-${a}`;
+          state.highlightedEdgeKeys.add(key);
+        }
+      }
+
+      document.getElementById('btnShowRouteModal').classList.remove('hidden');
+      document.getElementById('btnClearRoute').classList.remove('hidden');
+
+      renderAll();
+      populateRouteOutputModal(result, startId, endId);
+
+      if (openPopupModal) {
+        document.getElementById('routeOutputModal').classList.remove('hidden');
+      }
+    }
+
+    function populateRouteOutputModal(result, startId, endId) {
+      const badge = document.getElementById('routeStatusBadge');
+      const distEl = document.getElementById('metricTotalDistance');
+      const walkEl = document.getElementById('metricWalkTime');
+      const hopEl = document.getElementById('metricHopCount');
+      const chainEl = document.getElementById('routeBreadcrumbChain');
+      const queueBox = document.getElementById('traceQueueBox');
+      const stackBox = document.getElementById('traceStackBox');
+
+      document.getElementById('routeAlgoLabel').textContent = result.algorithmName;
+
+      // Format Queue / Visitation Log
+      queueBox.innerHTML = result.visitationLog
+        .map((id, i) => `${i + 1}. dequeue() → [${id}] ${escapeHtml(graph.getVertex(id)?.name || '')}`)
+        .join('<br/>') || 'Empty';
+
+      if (!result.connected) {
+        badge.textContent = 'NOT CONNECTED — Pathway Blocked / Unreachable';
+        badge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#F5E6E4] text-[#A35B52] border border-[#DAB5AF]';
+        distEl.textContent = '—';
+        walkEl.textContent = 'Unreachable';
+        hopEl.textContent = '0 open routes';
+
+        const sName = escapeHtml(graph.getVertex(startId)?.name || '');
+        const eName = escapeHtml(graph.getVertex(endId)?.name || '');
+        chainEl.innerHTML = `
+          <div class="text-[12.5px] text-[#9E5950] py-1">
+            No open pathway chain exists between <strong>${sName}</strong> and <strong>${eName}</strong>.
+            Check if connecting roads have <code>isBlocked = true</code> and reopen them by right-clicking a dashed line.
+          </div>
+        `;
+        stackBox.innerHTML = 'Destination never reached — RouteStack remained empty.';
+        return;
+      }
+
+      badge.textContent = 'CONNECTED';
+      badge.className = 'px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#E4F0EA] text-[#356353] border border-[#B5D1C4]';
+
+      const walkMinutes = Math.max(1, Math.round(result.totalDistance / 78));
+      distEl.textContent = `${result.totalDistance} meters`;
+      walkEl.textContent = result.totalDistance === 0 ? '0 min (Same)' : `~${walkMinutes} min walk`;
+      hopEl.textContent = `${result.segments.length} ${result.segments.length === 1 ? 'pathway' : 'pathways'}`;
+
+      // Visual Breadcrumb Chain
+      let chainHtml = '';
+      result.path.forEach((id, idx) => {
+        const bName = escapeHtml(graph.getVertex(id)?.name || `#${id}`);
+        chainHtml += `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#E9F1ED] border border-[#C2D8CD] text-[12px] font-medium text-[#2E5749]">
+            <span class="w-4 h-4 rounded-full bg-[#528B78] text-white text-[10px] flex items-center justify-center font-semibold">${idx + 1}</span>
+            ${bName}
+          </span>
+        `;
+        if (idx < result.segments.length) {
+          chainHtml += `
+            <span class="inline-flex flex-col items-center px-1 text-[#68737A]">
+              <span class="text-[10px] mono-font text-[#528B78] font-medium">${result.segments[idx].distance}m</span>
+              <span class="text-xs leading-none">→</span>
+            </span>
+          `;
+        }
+      });
+      chainEl.innerHTML = chainHtml;
+
+      // Stack Push & Pop Trace
+      const pushStr = result.stackPushOrder.map(id => `[${id}]`).join(' → ');
+      const popStr = result.stackPopOrder.map(id => `[${id}] ${escapeHtml(graph.getVertex(id)?.name.split('(')[0].trim() || '')}`).join(' → ');
+      stackBox.innerHTML = `
+        <div class="text-[#697077] mb-1"><strong>push() backtrack:</strong> ${pushStr}</div>
+        <div class="text-[#356353]"><strong>pop() forward route:</strong><br/>${popStr}</div>
+      `;
+    }
+
+    function clearRouteHighlight() {
+      state.activeRoute = null;
+      state.highlightedNodeStep.clear();
+      state.highlightedEdgeKeys.clear();
+      document.getElementById('btnShowRouteModal').classList.add('hidden');
+      document.getElementById('btnClearRoute').classList.add('hidden');
+      renderEdges();
+      renderBuildings();
+    }
+
+    document.getElementById('btnFindRoute').addEventListener('click', () => executeRouteSearch(true));
+    document.getElementById('btnShowRouteModal').addEventListener('click', () => {
+      document.getElementById('routeOutputModal').classList.remove('hidden');
+    });
+    document.getElementById('btnClearRoute').addEventListener('click', clearRouteHighlight);
+
+    document.getElementById('btnSwapLocations').addEventListener('click', () => {
+      const temp = startSelect.value;
+      startSelect.value = endSelect.value;
+      endSelect.value = temp;
+      if (state.activeRoute) executeRouteSearch(false);
+    });
+
+    document.getElementById('btnSwitchAlgoCompare').addEventListener('click', () => {
+      algoSelect.value = algoSelect.value === 'bfs' ? 'dijkstra' : 'bfs';
+      executeRouteSearch(true);
+    });
+
+    /* =========================================================================
+       SECTION 14: DRAWER, ZOOM CONTROLS & MODAL DISMISSAL
+       ========================================================================= */
+    document.getElementById('btnToggleDsaDrawer').addEventListener('click', () => {
+      const drawer = document.getElementById('dsaDrawer');
+      const isHidden = drawer.classList.contains('hidden');
+      if (isHidden) {
+        drawer.classList.remove('hidden');
+        drawer.classList.add('flex');
+        renderAdjacencyListDrawer();
+      } else {
+        drawer.classList.add('hidden');
+        drawer.classList.remove('flex');
+      }
+    });
+
+    document.getElementById('btnCloseDsaDrawer').addEventListener('click', () => {
+      const drawer = document.getElementById('dsaDrawer');
+      drawer.classList.add('hidden');
+      drawer.classList.remove('flex');
+    });
+
+    document.getElementById('btnResetCampus').addEventListener('click', () => {
+      loadManitCampus();
+      showToast('Restored default MANIT Bhopal campus network.');
+    });
+
+    // Zoom Controls
+    document.getElementById('btnZoomIn').addEventListener('click', () => {
+      state.viewTransform.scale = Math.min(1.8, +(state.viewTransform.scale + 0.12).toFixed(2));
+      applyViewportTransform();
+    });
+    document.getElementById('btnZoomOut').addEventListener('click', () => {
+      state.viewTransform.scale = Math.max(0.55, +(state.viewTransform.scale - 0.12).toFixed(2));
+      applyViewportTransform();
+    });
+    document.getElementById('btnZoomReset').addEventListener('click', () => {
+      state.viewTransform = { x: 0, y: 0, scale: 1 };
+      applyViewportTransform();
+    });
+
+    // Close modals via buttons or backdrop click
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const targetId = btn.getAttribute('data-close-modal');
+        document.getElementById(targetId).classList.add('hidden');
+      });
+    });
+
+    ['edgeSettingsModal', 'connectBuildingModal', 'buildingModal', 'connectionsModal', 'routeOutputModal'].forEach(id => {
+      const modal = document.getElementById(id);
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.add('hidden');
+      });
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        hideContextMenu();
+        cancelInteractiveConnectMode();
+        ['edgeSettingsModal', 'connectBuildingModal', 'buildingModal', 'connectionsModal', 'routeOutputModal'].forEach(id => {
+          document.getElementById(id).classList.add('hidden');
+        });
+      }
+    });
+
+    // Boot Application on Window Load
+    window.onload = function() {
+      loadManitCampus();
+    };
+  </script>
+</body>
+</html>

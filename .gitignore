@@ -1,0 +1,10 @@
+# Compiled C++ binaries and object files
+*.out
+*.o
+*.exe
+route_finder
+
+# Editor & OS temporary files
+.vscode/
+.DS_Store
+*~
